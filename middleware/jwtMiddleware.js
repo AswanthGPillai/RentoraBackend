@@ -17,6 +17,8 @@ const jwtMiddleware = (req, res, next) => {
     }
 
     const token = parts[1]
+    console.log(token);
+    
 
     try {
         const jwtResponse = jwt.verify(token, process.env.sk)

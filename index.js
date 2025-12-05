@@ -29,6 +29,8 @@ bookStoreServer.use(cors())
 bookStoreServer.use(express.json())// parse json -- middleware
 // bookStoreServer.use(appMiddleware) //--middleware
 bookStoreServer.use(route)
+// exporting upload folder
+bookStoreServer.use("/upload",express.static("./uploads"))
 
 
 
