@@ -28,14 +28,15 @@ const bookStoreServer=express()
 bookStoreServer.use(cors())
 bookStoreServer.use(express.json())// parse json -- middleware
 // bookStoreServer.use(appMiddleware) //--middleware
-bookStoreServer.use(route)
+
 // exporting upload folder
-bookStoreServer.use("/upload",express.static("./uploads"))
+bookStoreServer.use("/uploads",express.static("./uploads"))
+bookStoreServer.use(route)
 
 
 
 // create port 
-PORT=4000 || process.env.PORT
+const PORT = process.env.PORT || 4000;
 
 bookStoreServer.listen(PORT,()=>{
     console.log(`Server running in ${PORT}`);

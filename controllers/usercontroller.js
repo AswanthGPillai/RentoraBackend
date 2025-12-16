@@ -19,7 +19,7 @@ exports.registerController = async (req, res) => {
             res.status(400).json("Already registered user..")
         } else {
             const newUser = new users({
-                username, email, password
+                username, email, password,profile:""
             })
             await newUser.save() //save to mongodb
             res.status(200).json(newUser)
@@ -30,7 +30,6 @@ exports.registerController = async (req, res) => {
 
     }
 }
-
 
 exports.loginController = async (req, res) => {
     // logic
@@ -63,7 +62,6 @@ exports.loginController = async (req, res) => {
 
 }
 
-
 exports.googleLoginController = async (req, res) => {
     // logic
     const { username, email, password, photo } = req.body
@@ -82,7 +80,7 @@ exports.googleLoginController = async (req, res) => {
             })
             await newUser.save() //save to mongodb
             const token = jwt.sign({ userMail: existingUser.email }, "secretKey")
-            res.status(200).json({ existingUser:newUser, token })
+            res.status(200).json({ existingUser: newUser, token })
         }
 
     } catch (err) {
@@ -92,4 +90,73 @@ exports.googleLoginController = async (req, res) => {
 
 
 
+}
+
+exports.getAllUsersController = async (req, res) => {
+    // logic
+    const email = req.payload
+
+    // errr handling
+    try {
+
+        const allUsers = await users.find({ email: { $ne: email } })
+        res.status(200).json(allUsers)
+
+
+    } catch (err) {
+        res.status(500).json(err)
+
+    }
+
+
+
+}
+
+exports.adminUpdateProfileController = async (req, res) => {
+    // logic
+
+    const{username,password,profile}=req.body
+
+    const prof=req.file?req.file.filename:profile
+    // console.log(req.file.filename);
+    
+
+    const email = req.payload
+    console.log(email);
+    
+
+    // errr handling
+    try {
+
+        const adminProfile = await users.findOneAndUpdate({email},{username,email,password,profile:prof},{new:true})
+        res.status(200).json(adminProfile)
+
+
+    } catch (err) {
+        res.status(500).json(err)
+
+    }
+
+
+
+}
+
+
+exports.userUpdateProfileController = async (req, res) => {
+    // logic
+    const{username,password,profile,bio}=req.body
+    const prof=req.file?req.file.filename:profile
+    // console.log(req.file.filename);
+    const email = req.payload
+    console.log(email);
+
+    // errr handling
+    try {
+
+        const userDetails = await users.findOneAndUpdate({email},{username,email,password,profile:prof,bio},{new:true})
+        res.status(200).json(userDetails)
+    } catch (err) {
+        res.status(500).json(err)
+
+    }
 }
