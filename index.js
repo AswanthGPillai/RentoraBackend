@@ -8,16 +8,15 @@ require("dotenv").config();
 // =========================
 require("./dBconnection");
 
-// =========================
-// CRON JOBS
-// =========================
-require("./cron/bookingCron");
+// ❌ REMOVE IN-APP CRON
+// require("./cron/bookingCron");
 
 // =========================
 // IMPORTS
 // =========================
 const express = require("express");
 const cors = require("cors");
+
 const route = require("./routes");
 
 // =========================
@@ -29,10 +28,13 @@ const app = express();
 // MIDDLEWARES (ORDER MATTERS)
 // =========================
 
-// ✅ CORS MUST COME FIRST
+// ✅ CORS (LOCAL + PROD)
 app.use(
   cors({
-    origin: "http://localhost:5173", // frontend URL
+    origin: [
+      "http://localhost:5173",
+      "https://rentora-frontend-zduq.vercel.app",
+    ],
     credentials: true,
   })
 );
@@ -55,18 +57,16 @@ app.use((req, res, next) => {
   next();
 });
 
-
-
+// =========================
+// ROUTES
+// =========================
 app.use("/api/chat", require("./routes/chatRoutes"));
+app.use("/api", route);
+
 // =========================
 // STATIC FILES
 // =========================
 app.use("/uploads", express.static("uploads"));
-
-// =========================
-// API ROUTES
-// =========================
-app.use("/api", route);
 
 // =========================
 // ROOT TEST
