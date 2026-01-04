@@ -1,40 +1,69 @@
-const jwt=require('jsonwebtoken')
+const jwt = require("jsonwebtoken");
+const User = require("../models/userModel");
 
-const jwtAdminMiddleware = (req, res, next) => {
-
-    console.log("inside jwtmiddleware");
-
-    const authHeader = req.headers && req.headers.authorization
+const jwtAdminMiddleware = async (req, res, next) => {
+  try {
+    /* =========================
+       1️⃣ READ AUTH HEADER
+    ========================= */
+    const authHeader = req.headers.authorization;
 
     if (!authHeader) {
-        console.warn("Missing Authorization header in request")
-        return res.status(401).json({ error: "Authorization header missing" })
+      return res.status(401).json({
+        message: "Authorization header missing",
+      });
     }
 
-    const parts = authHeader.split(' ')
-    if (parts.length !== 2 || parts[0] !== 'Bearer') {
-        return res.status(401).json({ error: "Invalid Authorization format" })
+    /* =========================
+       2️⃣ VALIDATE BEARER TOKEN
+    ========================= */
+    const [scheme, token] = authHeader.split(" ");
+
+    if (scheme !== "Bearer" || !token) {
+      return res.status(401).json({
+        message: "Invalid Authorization format",
+      });
     }
 
-    const token = parts[1]
-    console.log(token);
-    
+    /* =========================
+       3️⃣ VERIFY JWT
+    ========================= */
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    try {
-        const jwtResponse = jwt.verify(token, process.env.sk)
-        console.log(jwtResponse)
-        req.payload = jwtResponse.userMail
-        if(req.payload=="bookadmin@gmail.com"){
-            return next()
-        }else{
-            return res.status(401).json({ error: "Invalid user." })
-        }
+    /* =========================
+       4️⃣ FIND USER FROM TOKEN
+    ========================= */
+    const user = await User.findById(decoded.userId);
 
-    } catch (err) {
-        console.error("JWT verification failed:", err.message)
-        return res.status(401).json({ error: "Invalid or expired token" })
+    if (!user) {
+      return res.status(401).json({
+        message: "User not found",
+      });
     }
 
-}
+    /* =========================
+       5️⃣ ADMIN ROLE CHECK
+    ========================= */
+    if (user.role !== "admin") {
+      return res.status(403).json({
+        message: "Admin access only",
+      });
+    }
 
-module.exports=jwtAdminMiddleware
+    /* =========================
+       6️⃣ ATTACH USER TO REQUEST
+    ========================= */
+    req.userId = user._id;
+    req.user = user;
+
+    next();
+  } catch (error) {
+    console.error("Admin JWT Error:", error.message);
+
+    return res.status(401).json({
+      message: "Invalid or expired token",
+    });
+  }
+};
+
+module.exports = jwtAdminMiddleware;

@@ -1,49 +1,85 @@
-// import dotenv
+// =========================
+// LOAD ENV
+// =========================
+require("dotenv").config();
 
-require("dotenv").config()
+// =========================
+// DB CONNECTION
+// =========================
+require("./dBconnection");
 
-// import DBfile
-require('./dBconnection')
+// =========================
+// CRON JOBS
+// =========================
+require("./cron/bookingCron");
+
+// =========================
+// IMPORTS
+// =========================
+const express = require("express");
+const cors = require("cors");
+const route = require("./routes");
+
+// =========================
+// CREATE SERVER
+// =========================
+const app = express();
+
+// =========================
+// MIDDLEWARES (ORDER MATTERS)
+// =========================
+
+// ✅ CORS MUST COME FIRST
+app.use(
+  cors({
+    origin: "http://localhost:5173", // frontend URL
+    credentials: true,
+  })
+);
+
+// ✅ Body parser
+app.use(express.json());
+
+// =========================
+// COOP / COEP HEADERS (GOOGLE LOGIN FIX)
+// =========================
+app.use((req, res, next) => {
+  res.setHeader(
+    "Cross-Origin-Opener-Policy",
+    "same-origin-allow-popups"
+  );
+  res.setHeader(
+    "Cross-Origin-Embedder-Policy",
+    "unsafe-none"
+  );
+  next();
+});
 
 
-// import express 
-const express=require("express")
 
-// import cors
-const cors=require("cors")
+app.use("/api/chat", require("./routes/chatRoutes"));
+// =========================
+// STATIC FILES
+// =========================
+app.use("/uploads", express.static("uploads"));
 
-// import route
-const route=require("./routes")
+// =========================
+// API ROUTES
+// =========================
+app.use("/api", route);
 
-// import middleware
-// const appMiddleware=require('./middleware/appMiddleware')
+// =========================
+// ROOT TEST
+// =========================
+app.get("/", (req, res) => {
+  res.status(200).send("<h1>Server started successfully 🚀</h1>");
+});
 
-
-
-// create server 
-const bookStoreServer=express()
-
-
-// server using cors
-bookStoreServer.use(cors())
-bookStoreServer.use(express.json())// parse json -- middleware
-// bookStoreServer.use(appMiddleware) //--middleware
-
-// exporting upload folder
-bookStoreServer.use("/uploads",express.static("./uploads"))
-bookStoreServer.use(route)
-
-
-
-// create port 
+// =========================
+// START SERVER
+// =========================
 const PORT = process.env.PORT || 4000;
 
-bookStoreServer.listen(PORT,()=>{
-    console.log(`Server running in ${PORT}`);
-    
-})
-
-bookStoreServer.get("/",(req,res)=>{
-    res.status(200).send("<h1>Server started......</h1>")
-})
-
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+});

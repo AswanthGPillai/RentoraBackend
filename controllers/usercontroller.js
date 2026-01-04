@@ -1,162 +1,220 @@
+// =========================
+// IMPORTS
+// =========================
+const Users = require("../models/userModel");
+const Booking = require("../models/bookingModel");
+const bcrypt = require("bcrypt");
+const generateToken = require("../utils/generateToken");
 
-// import users
-const users = require("../models/userModal")
-
-// import jwt 
-const jwt = require('jsonwebtoken')
-
-
+/* =========================
+   REGISTER
+========================= */
 exports.registerController = async (req, res) => {
-    // logic
-    const { username, email, password } = req.body
-    console.log(username, email, password);
+  try {
+    const { username, email, password } = req.body;
 
-    // errr handling
-    try {
-
-        const existingUser = await users.findOne({ email })
-        if (existingUser) {
-            res.status(400).json("Already registered user..")
-        } else {
-            const newUser = new users({
-                username, email, password,profile:""
-            })
-            await newUser.save() //save to mongodb
-            res.status(200).json(newUser)
-        }
-
-    } catch (err) {
-        res.status(500).json(err)
-
+    if (!username || !email || !password) {
+      return res.status(400).json({ message: "All fields are required" });
     }
-}
 
+    const existingUser = await Users.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "User already registered" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = new Users({
+      username,
+      email,
+      password: hashedPassword,
+      profile: "",
+      bio: "User",
+      role: "user",
+      isGoogleUser: false,
+    });
+
+    await newUser.save();
+
+    res.status(201).json({
+      message: "User registered successfully",
+      user: newUser,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/* =========================
+   LOGIN
+========================= */
 exports.loginController = async (req, res) => {
-    // logic
-    const { email, password } = req.body
-    console.log(email, password);
+  try {
+    const { email, password } = req.body;
 
-    // errr handling
-    try {
-
-        const existingUser = await users.findOne({ email })
-        if (existingUser) {
-            if (existingUser.password == password) {
-                // JWT encryption 
-                const token = jwt.sign({ userMail: existingUser.email }, "secretKey")
-                res.status(200).json({ existingUser, token })
-            } else {
-                res.status(400).json("Password does not match")
-
-            }
-        } else {
-            res.status(400).json("User does not exist")
-        }
-
-    } catch (err) {
-        res.status(500).json(err)
-
+    const user = await Users.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: "User does not exist" });
     }
 
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid password" });
+    }
 
+    const token = generateToken(user._id);
 
-}
+    res.status(200).json({
+      existingUser: user,
+      token,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
 
+/* =========================
+   GOOGLE LOGIN (AUTO CREATE)
+========================= */
 exports.googleLoginController = async (req, res) => {
-    // logic
-    const { username, email, password, photo } = req.body
-    console.log(username, email, password, photo);
+  try {
+    const { username, email, profile } = req.body;
 
-    // errr handling
-    try {
-
-        const existingUser = await users.findOne({ email })
-        if (existingUser) {
-            const token = jwt.sign({ userMail: existingUser.email }, "secretKey")
-            res.status(200).json({ existingUser, token })
-        } else {
-            const newUser = new users({
-                username, email, password, profile: photo
-            })
-            await newUser.save() //save to mongodb
-            const token = jwt.sign({ userMail: existingUser.email }, "secretKey")
-            res.status(200).json({ existingUser: newUser, token })
-        }
-
-    } catch (err) {
-        res.status(500).json(err)
-
+    if (!email) {
+      return res.status(400).json({ message: "Email required" });
     }
 
+    let existingUser = await Users.findOne({ email });
 
+    if (!existingUser) {
+      const randomPassword = Math.random().toString(36).slice(-10);
+      const hashedPassword = await bcrypt.hash(randomPassword, 10);
 
-}
+      existingUser = new Users({
+        username,
+        email,
+        password: hashedPassword,
+        profile,
+        bio: "Google User",
+        role: "user",
+        isGoogleUser: true,
+      });
 
+      await existingUser.save();
+    }
+
+    const token = generateToken(existingUser._id);
+
+    res.status(200).json({
+      existingUser,
+      token,
+    });
+  } catch (err) {
+    console.error("Google login error:", err);
+    res.status(500).json({ message: "Google login failed" });
+  }
+};
+
+/* =========================
+   GET ALL USERS (ADMIN)
+========================= */
 exports.getAllUsersController = async (req, res) => {
-    // logic
-    const email = req.payload
+  try {
+    const admin = await Users.findById(req.userId);
 
-    // errr handling
-    try {
-
-        const allUsers = await users.find({ email: { $ne: email } })
-        res.status(200).json(allUsers)
-
-
-    } catch (err) {
-        res.status(500).json(err)
-
+    if (!admin || admin.role !== "admin") {
+      return res.status(403).json({ message: "Admin access only" });
     }
 
+    const users = await Users.find({ role: "user" }).sort({ createdAt: -1 });
 
+    res.status(200).json(users);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
 
-}
+/* =========================
+   DELETE USER (ADMIN)
+   ❌ BLOCK IF USER HAS BOOKINGS
+========================= */
+exports.deleteUserController = async (req, res) => {
+  try {
+    const admin = await Users.findById(req.userId);
 
+    if (!admin || admin.role !== "admin") {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const userId = req.params.id;
+
+    // 🔴 CHECK BOOKINGS
+    const hasBooking = await Booking.findOne({ userId });
+
+    if (hasBooking) {
+      return res.status(400).json({
+        message: "User has bookings and cannot be deleted",
+      });
+    }
+
+    await Users.findByIdAndDelete(userId);
+
+    res.status(200).json({
+      message: "User deleted successfully",
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/* =========================
+   ADMIN UPDATE PROFILE
+========================= */
 exports.adminUpdateProfileController = async (req, res) => {
-    // logic
+  try {
+    const { username, password, profile } = req.body;
+    const prof = req.file ? req.file.filename : profile;
 
-    const{username,password,profile}=req.body
+    const updateData = { username, profile: prof };
 
-    const prof=req.file?req.file.filename:profile
-    // console.log(req.file.filename);
-    
-
-    const email = req.payload
-    console.log(email);
-    
-
-    // errr handling
-    try {
-
-        const adminProfile = await users.findOneAndUpdate({email},{username,email,password,profile:prof},{new:true})
-        res.status(200).json(adminProfile)
-
-
-    } catch (err) {
-        res.status(500).json(err)
-
+    if (password) {
+      updateData.password = await bcrypt.hash(password, 10);
     }
 
+    const updatedAdmin = await Users.findByIdAndUpdate(
+      req.userId,
+      updateData,
+      { new: true }
+    );
 
+    res.status(200).json(updatedAdmin);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
 
-}
-
-
+/* =========================
+   USER UPDATE PROFILE
+========================= */
 exports.userUpdateProfileController = async (req, res) => {
-    // logic
-    const{username,password,profile,bio}=req.body
-    const prof=req.file?req.file.filename:profile
-    // console.log(req.file.filename);
-    const email = req.payload
-    console.log(email);
+  try {
+    const { username, password, profile, bio } = req.body;
+    const prof = req.file ? req.file.filename : profile;
 
-    // errr handling
-    try {
+    const updateData = { username, profile: prof, bio };
 
-        const userDetails = await users.findOneAndUpdate({email},{username,email,password,profile:prof,bio},{new:true})
-        res.status(200).json(userDetails)
-    } catch (err) {
-        res.status(500).json(err)
-
+    if (password) {
+      updateData.password = await bcrypt.hash(password, 10);
     }
-}
+
+    const updatedUser = await Users.findByIdAndUpdate(
+      req.userId,
+      updateData,
+      { new: true }
+    );
+
+    res.status(200).json(updatedUser);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
