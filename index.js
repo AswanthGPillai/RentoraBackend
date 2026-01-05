@@ -20,7 +20,7 @@ const cors = require("cors");
 const app = express();
 
 // =========================
-// ✅ PRODUCTION SAFE CORS
+// CORS CONFIG (EXPRESS 5 SAFE)
 // =========================
 const allowedOrigins = [
   "http://localhost:5173",
@@ -36,9 +36,9 @@ app.use(
       if (!origin) return callback(null, true);
 
       if (allowedOrigins.includes(origin)) {
-        callback(null, true);
+        return callback(null, true);
       } else {
-        callback(new Error("Not allowed by CORS"));
+        return callback(new Error("Not allowed by CORS"));
       }
     },
     credentials: true,
@@ -47,16 +47,13 @@ app.use(
   })
 );
 
-// ✅ REQUIRED FOR PREFLIGHT REQUESTS
-app.options("*", cors());
-
 // =========================
 // BODY PARSER
 // =========================
 app.use(express.json());
 
 // =========================
-// STATIC FILES (MUST BE BEFORE ROUTES)
+// STATIC FILES
 // =========================
 app.use("/uploads", express.static("uploads"));
 
