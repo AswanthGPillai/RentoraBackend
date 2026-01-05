@@ -4,10 +4,11 @@ const User = require("../models/userModel");
 const jwtMiddleware = async (req, res, next) => {
   try {
     /* =========================
-       1️⃣ Check Authorization Header
-       Expected: Bearer <token>
+       1️⃣ Read Authorization Header
+       Format: Bearer <token>
     ========================= */
-    const authHeader = req.headers.authorization;
+    const authHeader =
+      req.headers.authorization || req.headers.Authorization;
 
     if (!authHeader) {
       return res.status(401).json({
@@ -26,22 +27,19 @@ const jwtMiddleware = async (req, res, next) => {
     const token = parts[1];
 
     /* =========================
-       2️⃣ Verify JWT Token
+       2️⃣ Verify JWT
     ========================= */
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET
-    );
-    // decoded = { userId, iat, exp }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    if (!decoded || !decoded.userId) {
+    // decoded must contain userId
+    if (!decoded?.userId) {
       return res.status(401).json({
         message: "Invalid token payload",
       });
     }
 
     /* =========================
-       3️⃣ Fetch User from Database
+       3️⃣ Fetch User
     ========================= */
     const user = await User.findById(decoded.userId).select("-password");
 
@@ -52,15 +50,14 @@ const jwtMiddleware = async (req, res, next) => {
     }
 
     /* =========================
-       4️⃣ Attach User Info to Request
-       (CRITICAL)
+       4️⃣ Attach to Request (CRITICAL)
     ========================= */
-    req.userId = user._id;     // ✅ used in controllers
-    req.user = user;           // ✅ role, profile, etc.
+    req.userId = user._id.toString(); // 🔥 MUST be string-safe
+    req.user = user;
     req.userEmail = user.email;
 
     /* =========================
-       5️⃣ Continue to Controller
+       5️⃣ Continue
     ========================= */
     next();
   } catch (error) {
