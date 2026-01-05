@@ -8,16 +8,11 @@ require("dotenv").config();
 // =========================
 require("./dBconnection");
 
-// ❌ REMOVE IN-APP CRON
-// require("./cron/bookingCron");
-
 // =========================
 // IMPORTS
 // =========================
 const express = require("express");
 const cors = require("cors");
-
-const route = require("./routes");
 
 // =========================
 // CREATE SERVER
@@ -25,54 +20,57 @@ const route = require("./routes");
 const app = express();
 
 // =========================
-// MIDDLEWARES (ORDER MATTERS)
+// ✅ PRODUCTION SAFE CORS
 // =========================
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "https://rentora-frontend-tau.vercel.app",
+  "https://rentora-frontend-zduq.vercel.app",
+];
 
-// ✅ CORS (LOCAL + PROD)
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://rentora-frontend-zduq.vercel.app",
-    ],
+    origin: function (origin, callback) {
+      // allow Postman / server-to-server
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
-// ✅ Body parser
+// ✅ REQUIRED FOR PREFLIGHT REQUESTS
+app.options("*", cors());
+
+// =========================
+// BODY PARSER
+// =========================
 app.use(express.json());
 
 // =========================
-// COOP / COEP HEADERS (GOOGLE LOGIN FIX)
+// STATIC FILES (MUST BE BEFORE ROUTES)
 // =========================
-app.use((req, res, next) => {
-  res.setHeader(
-    "Cross-Origin-Opener-Policy",
-    "same-origin-allow-popups"
-  );
-  res.setHeader(
-    "Cross-Origin-Embedder-Policy",
-    "unsafe-none"
-  );
-  next();
-});
+app.use("/uploads", express.static("uploads"));
 
 // =========================
 // ROUTES
 // =========================
 app.use("/api/chat", require("./routes/chatRoutes"));
-app.use("/api", route);
-
-// =========================
-// STATIC FILES
-// =========================
-app.use("/uploads", express.static("uploads"));
+app.use("/api", require("./routes"));
 
 // =========================
 // ROOT TEST
 // =========================
 app.get("/", (req, res) => {
-  res.status(200).send("<h1>Server started successfully 🚀</h1>");
+  res.status(200).send("<h1>Rentora backend running 🚀</h1>");
 });
 
 // =========================
